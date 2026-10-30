@@ -1,11 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod assistant;
 mod dock_extras;
 mod power;
 mod services;
-mod shell_glass;
 mod shelf;
+mod shell_glass;
 mod state;
 mod tray;
 mod types;
@@ -98,10 +99,21 @@ fn main() {
             Some(vec![]),
         ))
         .invoke_handler(tauri::generate_handler![
+            assistant::assistant_open,
+            assistant::assistant_has_key,
+            assistant::assistant_save_key,
+            assistant::assistant_ask,
+            assistant::assistant_get_workspace_context,
+            assistant::assistant_diagnose_workspace,
+            assistant::assistant_write_workspace_file,
+            assistant::assistant_open_vscode_file,
+            assistant::assistant_transcribe_audio,
+            assistant::assistant_create_live_token,
             hide_native_osd,
             open_settings_window,
             open_wifi_settings,
             open_sound_settings,
+            open_microphone_privacy_settings,
             open_notification_center,
             open_system_tray,
             set_ignore_cursor_events,
@@ -227,6 +239,67 @@ fn main() {
             // invoke save_setting as soon as it loads, which happens before the
             // rest of this hook runs.
             crate::utils::init_settings_cache(app.handle());
+
+            // The Assistant only starts speech recognition after the user presses
+            // its microphone button. Handle WebView2's microphone request there so
+            // a previously dismissed site prompt does not leave the mic stuck.
+            #[cfg(windows)]
+            if let Some(assistant_window) = app.get_webview_window("assistant") {
+                let _ = assistant_window.with_webview(|webview| unsafe {
+                    use windows::core::Interface as _;
+                    use webview2_com::{
+                        Microsoft::Web::WebView2::Win32::{
+                            COREWEBVIEW2_PERMISSION_KIND,
+                            COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+                            COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                            ICoreWebView2_13,
+                            ICoreWebView2Profile4,
+                        },
+                        PermissionRequestedEventHandler, SetPermissionStateCompletedHandler,
+                    };
+                    let result = (|| -> windows::core::Result<()> {
+                        let core = webview.controller().CoreWebView2()?;
+                        // Overwrite any old WebView2 "deny" saved for the app's
+                        // local origin. The user starts recording only by pressing
+                        // Orbix's microphone button, so that is the explicit grant.
+                        if let Ok(webview13) = core.cast::<ICoreWebView2_13>() {
+                            if let Ok(profile) = webview13.Profile() {
+                                if let Ok(profile4) = profile.cast::<ICoreWebView2Profile4>() {
+                                    for origin in [
+                                        windows::core::w!("http://tauri.localhost"),
+                                        windows::core::w!("https://tauri.localhost"),
+                                    ] {
+                                        let completed = SetPermissionStateCompletedHandler::create(
+                                            Box::new(|_| Ok(())),
+                                        );
+                                        let _ = profile4.SetPermissionState(
+                                            COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+                                            origin,
+                                            COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                                            &completed,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        let handler = PermissionRequestedEventHandler::create(Box::new(|_, args| {
+                            let Some(args) = args else { return Ok(()); };
+                            let mut kind = COREWEBVIEW2_PERMISSION_KIND::default();
+                            args.PermissionKind(&mut kind)?;
+                            if kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE {
+                                args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW)?;
+                            }
+                            Ok(())
+                        }));
+                        let mut token = 0;
+                        core.add_PermissionRequested(&handler, &mut token)
+                    })();
+                    if let Err(error) = result {
+                        eprintln!("Could not enable Assistant microphone permission handling: {error}");
+                    }
+                });
+            }
+
             shell_glass::start_monitor(app.handle().clone());
             // Crash-recovery: if a previous session was force-killed while the native
             // taskbar was hidden, restore it now. Runs before the frontend re-hides it
@@ -474,5 +547,3 @@ fn main() {
         }
     });
 }
-
-

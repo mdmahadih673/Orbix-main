@@ -66,6 +66,51 @@ img {
 	--notch-bg: var(--bloom-bg-expanded, rgba(0, 0, 0, 0.92));
 }
 
+/* Keep the idle notch visually empty so only the transparent mascot is visible. */
+.bloom:not(.expanded) {
+	background: transparent;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	border-color: transparent;
+	box-shadow: none;
+}
+
+.bloom:not(.expanded).is-impacted::before,
+.bloom:not(.expanded).is-impacted::after {
+	display: none;
+}
+
+/* Always-visible tiny faceless pet mascot; controls appear on hover. */
+.notch-resting-pet {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	pointer-events: none;
+}
+
+.notch-pet {
+	position: absolute;
+	top: 50%;
+	left: calc(50% - 24px);
+	width: 48px;
+	height: 38px;
+	transform: translateY(-50%);
+	transform-origin: center bottom;
+	animation: assistant-pet-patrol 4s ease-in-out infinite alternate;
+}
+
+.bloom.assistant-working .notch-pet { filter: none; }
+.bloom.assistant-speaking .notch-pet { animation-duration: 1.1s; }
+
+@keyframes assistant-pet-patrol {
+	from { left: 6px; transform: translateY(-50%) scale(1); }
+	to { left: calc(100% - 54px); transform: translateY(-50%) scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.notch-pet { animation: none; left: calc(50% - 24px); }
+}
+
 .main-row {
 	display: flex;
 	align-items: center;

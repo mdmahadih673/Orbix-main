@@ -2181,6 +2181,23 @@ pub fn open_sound_settings() {
 }
 
 #[tauri::command]
+pub fn open_microphone_privacy_settings() {
+    unsafe {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::Shell::ShellExecuteA;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let _ = ShellExecuteA(
+            Some(HWND(std::ptr::null_mut())),
+            windows::core::PCSTR(c"open".as_ptr() as *const u8),
+            windows::core::PCSTR(c"ms-settings:privacy-microphone".as_ptr() as *const u8),
+            windows::core::PCSTR::null(),
+            windows::core::PCSTR::null(),
+            SW_SHOWNORMAL,
+        );
+    }
+}
+
+#[tauri::command]
 pub fn open_notification_center() {
     unsafe {
         use windows::Win32::Foundation::HWND;
@@ -4739,42 +4756,41 @@ pub async fn search_user_files(query: String) -> Vec<SearchFileItem> {
             }
         }
 
-        // 2. Scan items inside Desktop, Downloads, Documents
-        let search_folders = [
-            user_path.join("Desktop"),
-            user_path.join("Downloads"),
-            user_path.join("Documents"),
-        ];
-
-        for folder in &search_folders {
-            if let Ok(entries) = std::fs::read_dir(folder) {
-                let mut count = 0;
+        // 2. Search the user's standard folders recursively, with bounds so a
+        // large Downloads/Pictures tree cannot stall the assistant.
+        if !query_lower.is_empty() {
+            let search_folders = ["Desktop", "Downloads", "Documents", "Pictures", "Music", "Videos"];
+            let mut stack: Vec<(std::path::PathBuf, usize)> = search_folders
+                .iter()
+                .map(|folder| (user_path.join(folder), 0))
+                .collect();
+            let mut scanned = 0usize;
+            while let Some((folder, depth)) = stack.pop() {
+                if depth > 7 || results.len() >= 50 || scanned >= 6000 {
+                    break;
+                }
+                let Ok(entries) = std::fs::read_dir(&folder) else { continue };
                 for entry in entries.flatten() {
-                    if count >= 35 {
-                        break;
-                    }
-                    let p = entry.path();
-                    let file_name = p
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string();
-                    if file_name.starts_with('.')
-                        || file_name.eq_ignore_ascii_case("desktop.ini")
-                    {
-                        continue;
-                    }
-
-                    if fuzzy_match_simple(&query_lower, &file_name) {
-                        let is_dir = p.is_dir();
-                        let ext = p.extension().map(|e| e.to_string_lossy().to_string());
+                    scanned += 1;
+                    if scanned >= 6000 || results.len() >= 50 { break; }
+                    let path = entry.path();
+                    let Ok(file_type) = entry.file_type() else { continue };
+                    if file_type.is_symlink() { continue; }
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    if file_name.starts_with('.') || file_name.eq_ignore_ascii_case("desktop.ini") { continue; }
+                    if file_name.contains(query_lower.as_str()) || fuzzy_match_simple(&query_lower, &file_name) {
                         results.push(SearchFileItem {
-                            name: file_name,
-                            path: p.to_string_lossy().to_string(),
-                            is_dir,
-                            ext,
+                            name: file_name.clone(),
+                            path: path.to_string_lossy().to_string(),
+                            is_dir: file_type.is_dir(),
+                            ext: path.extension().map(|e| e.to_string_lossy().to_string()),
                         });
-                        count += 1;
+                    }
+                    if file_type.is_dir()
+                        && depth < 7
+                        && !matches!(file_name.to_lowercase().as_str(), "node_modules" | ".git" | "appdata")
+                    {
+                        stack.push((path, depth + 1));
                     }
                 }
             }

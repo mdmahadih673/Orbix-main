@@ -53,6 +53,7 @@ windows = { version = "0.61", features = [
 	"Win32_System_LibraryLoader",
 	"Win32_System_IO",
 	"Win32_Security",
+	"Win32_Security_Credentials",
 	"Win32_System_Registry",
 	"Win32_Devices_FunctionDiscovery",
 	"Devices_Radios",
@@ -74,6 +75,7 @@ image = "0.25"
 tauri-plugin-drag = "2.1.1"
 tauri-plugin-dialog = "2"
 rustfft = "6"
+reqwest = { version = "0.13.2", default-features = false, features = ["json", "rustls"] }
 
 [features]
 default = ["custom-protocol"]

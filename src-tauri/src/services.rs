@@ -2165,11 +2165,39 @@ pub fn clear_notch_expiry() {
 /// `bloom-notch-edge-delay` (ms); `0` restores the old instant behavior.
 const TOP_EDGE_BAND_PX: f64 = 8.0;
 const TOP_EDGE_DWELL_MS: i64 = 200;
+/// A short hover-intent gate keeps a resting notch from stealing clicks meant
+/// for browser tabs underneath it. The window still becomes interactive when
+/// the pointer deliberately rests over the notch.
+const NOTCH_HOVER_DWELL_MS: i64 = 450;
+const NOTCH_HOVER_GRACE_MS: i64 = 160;
 /// The mouse hook only fires on WM_MOUSEMOVE, so a pending dwell is completed
 /// by a watchdog that re-checks at this cadence.
 const TOP_EDGE_POLL_MS: u64 = 40;
 static MH_TOP_EDGE_ENTER_MS: AtomicI64 = AtomicI64::new(0);
 static MH_TOP_EDGE_ARMED: AtomicBool = AtomicBool::new(false);
+static MH_NOTCH_HOVER_ENTER_MS: AtomicI64 = AtomicI64::new(0);
+static MH_NOTCH_HOVER_ARMED: AtomicBool = AtomicBool::new(false);
+
+fn notch_hover_armed_for(inside: bool, now: i64) -> bool {
+    if !inside {
+        MH_NOTCH_HOVER_ENTER_MS.store(0, Ordering::Relaxed);
+        MH_NOTCH_HOVER_ARMED.store(false, Ordering::Relaxed);
+        return false;
+    }
+    if MH_NOTCH_HOVER_ARMED.load(Ordering::Relaxed) {
+        return true;
+    }
+    let enter = MH_NOTCH_HOVER_ENTER_MS.load(Ordering::Relaxed);
+    if enter == 0 {
+        MH_NOTCH_HOVER_ENTER_MS.store(now, Ordering::Relaxed);
+        return false;
+    }
+    if now - enter >= NOTCH_HOVER_DWELL_MS {
+        MH_NOTCH_HOVER_ARMED.store(true, Ordering::Relaxed);
+        return true;
+    }
+    false
+}
 
 /// Physical bounds `(x, y, width, height)` of the expanded per-app volume
 /// mixer (notch + panel), if it is open. The frontend reports the card in
@@ -2479,16 +2507,14 @@ fn update_main_interaction(
         if let Some((win_pos, _)) = *guard {
             if let Ok(region) = NOTCH_RECT.lock() {
                 if let Some(r) = *region {
-                    let pad_x = (35.0 * scale) as i32;
-                    let pad_y_bottom = (35.0 * scale) as i32;
-                    // Hysteresis keeps the notch interactive a little past its
-                    // bounds once grabbed, so removing the edge-forced
-                    // interactivity doesn't reintroduce boundary flicker.
+                    // Keep the native interactive footprint close to the
+                    // visible notch. A large padded hitbox catches browser
+                    // tabs even when the pointer is no longer over Orbix.
+                    let pad_x = (3.0 * scale) as i32;
+                    let pad_y_bottom = (5.0 * scale) as i32;
                     let hyst = if MH_LAST_MAIN_IGNORE.load(Ordering::Relaxed) == 0 {
-                        (20.0 * scale) as i32
-                    } else {
-                        0
-                    };
+                        (3.0 * scale) as i32
+                    } else { 0 };
                     let rx = win_pos.x + (r.x as f64 * scale) as i32 - pad_x - hyst;
                     let rw = (r.width as f64 * scale) as i32 + (pad_x * 2) + (hyst * 2);
                     let ry_top = (win_pos.y + (r.y as f64 * scale) as i32 - hyst).min(win_pos.y);
@@ -2499,15 +2525,11 @@ fn update_main_interaction(
                         && cursor.y >= (ry_top - 5)
                         && cursor.y <= ry_bottom;
 
-                    // Approaching along the top edge keeps the window interactive
-                    // while near the notch's horizontal span. This must stay
-                    // immediate (never dwell-gated): NOTCH_RECT lags the expand/
-                    // contract animation, and letting click-through flip mid-hover
-                    // makes the notch expand/contract repeatedly. It is gated on
-                    // the notch being on screen (or a live hover) so a hidden
-                    // notch still can't swallow pass-by clicks.
+                    // Only claim the narrow top-edge strip after its deliberate
+                    // dwell. Without this, browser tab clicks near the notch can
+                    // make the whole overlay window interactive immediately.
                     let edge_pad = (60.0 * scale) as i32;
-                    in_top_span = in_top_edge_band(cursor, scale)
+                    in_top_span = edge_armed && in_top_edge_band(cursor, scale)
                         && cursor.x >= rx - edge_pad
                         && cursor.x <= rx + rw + edge_pad;
                 }
@@ -2515,17 +2537,20 @@ fn update_main_interaction(
         }
     }
 
-    // Refresh expiry when cursor is within notch bounds, top span, edge armed, or while notch hover is active in frontend
+    let notch_hover_armed = notch_hover_armed_for(in_notch_rect, now);
+
+    // Refresh expiry only after deliberate hover intent. Short grace prevents
+    // flicker while leaving the notch without trapping clicks in nearby tabs.
     let is_hover_active = NOTCH_IS_HOVERED.load(Ordering::Relaxed);
-    if in_notch_rect || in_top_span || edge_armed || (is_hover_active && in_notch_rect) {
-        MH_TOPBAR_EXPIRY_MS.store(now + 600, Ordering::Relaxed);
+    if notch_hover_armed || in_top_span || edge_armed || (is_hover_active && notch_hover_armed) {
+        MH_TOPBAR_EXPIRY_MS.store(now + NOTCH_HOVER_GRACE_MS, Ordering::Relaxed);
     }
 
     let expiry = MH_TOPBAR_EXPIRY_MS.load(Ordering::Relaxed);
     let grace_active = now < expiry;
 
     let mut is_click_interactive = false;
-    if in_notch_rect || in_top_span {
+    if notch_hover_armed || in_top_span {
         is_click_interactive = true;
     } else if grace_active {
         // Grace period keeps click-interactive during brief boundary exits or scrolling
@@ -2534,7 +2559,7 @@ fn update_main_interaction(
         is_click_interactive = true;
     }
 
-    let final_notch_hover = edge_armed || in_notch_rect || in_top_span || grace_active;
+    let final_notch_hover = edge_armed || notch_hover_armed || in_top_span || grace_active;
     let prev = MH_LAST_TOP_EDGE_HOVER.load(Ordering::Relaxed);
     let new_val = if final_notch_hover { 1 } else { 0 };
     if prev != new_val {
@@ -2637,6 +2662,12 @@ unsafe extern "system" fn mouse_hook_proc(
         if let Some(app_handle) = MOUSE_HOOK_APP_HANDLE.get() {
             let pt = &*(lparam.0 as *const MSLLHOOKSTRUCT);
             let cursor = pt.pt;
+            // Mascot gaze uses global pointer coordinates because transparent
+            // overlay windows do not receive WebView pointermove events.
+            let _ = app_handle.emit("orbix-global-cursor", serde_json::json!({
+                "x": cursor.x,
+                "y": cursor.y,
+            }));
 
             // While a capture UI (Snipping Tool) is up, Bloom is fully
             // click-through and skipped entirely so the tool owns the screen.

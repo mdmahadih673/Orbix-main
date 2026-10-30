@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 112" fill="none">
+  <defs>
+    <linearGradient id="shell" x1="80" y1="5" x2="80" y2="105" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset=".55" stop-color="#edf8ff"/>
+      <stop offset="1" stop-color="#a9cde3"/>
+    </linearGradient>
+    <linearGradient id="visor" x1="80" y1="20" x2="80" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#07111e"/>
+      <stop offset=".68" stop-color="#020710"/>
+      <stop offset="1" stop-color="#091a2b"/>
+    </linearGradient>
+    <linearGradient id="ear" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#dff5ff"/>
+      <stop offset=".5" stop-color="#8db9d6"/>
+      <stop offset="1" stop-color="#527c9d"/>
+    </linearGradient>
+    <linearGradient id="shellRim" x1="21" y1="20" x2="139" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff" stop-opacity=".92"/>
+      <stop offset=".34" stop-color="#d8f3ff" stop-opacity=".08"/>
+      <stop offset=".72" stop-color="#4382a8" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#6db9ec" stop-opacity=".58"/>
+    </linearGradient>
+    <linearGradient id="visorGlass" x1="51" y1="26" x2="108" y2="98" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a8efff" stop-opacity=".16"/>
+      <stop offset=".38" stop-color="#5acbff" stop-opacity=".015"/>
+      <stop offset="1" stop-color="#01040a" stop-opacity=".28"/>
+    </linearGradient>
+  </defs>
+  <!-- Headset sides and shell: transparent canvas, head only. -->
+  <path d="M23 43c-8 0-13 6-13 15v11c0 9 5 15 14 15h8V43h-9Zm114 0c8 0 13 6 13 15v11c0 9-5 15-14 15h-7V43h8Z" fill="url(#ear)" stroke="#d7f2ff" stroke-width="2"/>
+  <path d="M25 57C25 26 47 7 80 7s55 19 55 50v17c0 18-12 28-31 32-15 3-33 3-48 0-19-4-31-14-31-32V57Z" fill="url(#shell)" stroke="#eaf8ff" stroke-width="2.5"/>
+  <path d="M27 58C27 29 48 10 80 10s53 19 53 48v16c0 16-11 26-29 30-15 3-33 3-48 0-18-4-29-14-29-30V58Z" fill="url(#shellRim)"/>
+  <path d="M34 55c0-22 18-34 46-34s46 12 46 34v17c0 14-10 22-26 25-13 2-27 2-40 0-16-3-26-11-26-25V55Z" fill="url(#visor)" stroke="#506d82" stroke-width="2"/>
+  <path d="M36 55c0-21 18-32 44-32s44 11 44 32v17c0 14-10 21-25 24-12 2-26 2-38 0-15-3-25-10-25-24V55Z" fill="url(#visorGlass)"/>
+  <path d="M41 46c8-13 21-18 39-18" stroke="#fff" stroke-opacity=".18" stroke-width="2" stroke-linecap="round"/>
+  <path d="M32 58c0-27 19-46 48-46s48 19 48 46" stroke="#fff" stroke-opacity=".62" stroke-width="2" stroke-linecap="round"/>
+  <path d="M39 83c8 9 22 13 41 13 18 0 32-4 41-13" stroke="#8ccfff" stroke-opacity=".2" stroke-width="2" stroke-linecap="round"/>
+</svg>

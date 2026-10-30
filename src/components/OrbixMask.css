@@ -1,0 +1,108 @@
+.orbix-mask {
+	position: relative;
+	display: block;
+	width: 100%;
+	height: 100%;
+	line-height: 0;
+	background: transparent;
+	filter: drop-shadow(0 5px 5px rgba(0, 7, 20, .38)) drop-shadow(0 0 8px rgba(35, 166, 255, .14));
+	transform: perspective(300px) rotateX(var(--mascot-turn-x, 0deg)) rotateY(var(--mascot-turn-y, 0deg)) rotateZ(var(--mascot-roll, 0deg));
+	transform-origin: center center;
+	transform-style: preserve-3d;
+	transition: transform 170ms cubic-bezier(.2, .8, .2, 1), filter 170ms ease-out;
+	will-change: transform;
+}
+
+.orbix-mask > img {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	background: transparent;
+	transform: translateZ(8px);
+	backface-visibility: hidden;
+}
+
+.orbix-mask-eyes {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+
+.orbix-mask-eye {
+	fill: #64dcff;
+	filter: drop-shadow(0 0 5px rgba(32, 195, 255, .95));
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+.orbix-mask-eye-gaze {
+	transition: transform 110ms ease-out;
+	filter: drop-shadow(0 1px 2px rgba(0, 8, 20, .65));
+}
+
+.orbix-mask-mouth-dot {
+	fill: #83eaff;
+	filter: drop-shadow(0 0 4px rgba(42, 199, 255, .95));
+	transition: opacity 120ms ease;
+}
+
+.orbix-mask-mouth-bars {
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.orbix-mask-mouth-bar {
+	fill: #83eaff;
+	filter: drop-shadow(0 0 3px rgba(42, 199, 255, .9));
+	transform-box: fill-box;
+	transform-origin: center bottom;
+}
+
+.bloom.assistant-speaking .orbix-mask-mouth-dot { opacity: 0; }
+.bloom.assistant-speaking .orbix-mask-mouth-bars { opacity: 1; }
+.bloom.assistant-speaking .orbix-mask-mouth-bar { animation: assistant-mouth-wave .46s ease-in-out infinite alternate; }
+.bloom.assistant-speaking .bar-1,.bloom.assistant-speaking .bar-7 { animation-delay: -180ms; }
+.bloom.assistant-speaking .bar-2,.bloom.assistant-speaking .bar-6 { animation-delay: -90ms; }
+.bloom.assistant-speaking .bar-3,.bloom.assistant-speaking .bar-5 { animation-delay: -260ms; }
+
+@keyframes assistant-mouth-wave {
+	from { transform: scaleY(.24); }
+	to { transform: scaleY(1); }
+}
+
+.bloom.assistant-working .orbix-mask-eye-left {
+	animation: assistant-eye-left-motion 2.8s ease-in-out infinite;
+}
+
+.bloom.assistant-working .orbix-mask-eye-right {
+	animation: assistant-eye-right-motion 2.8s ease-in-out infinite;
+	animation-delay: 60ms;
+}
+
+@keyframes assistant-eye-left-motion {
+	0%, 18%, 22%, 63%, 67%, 100% { transform: translate(-1px, 0) scaleY(1); }
+	20%, 65% { transform: translate(1px, 0) scaleY(.025); }
+}
+
+@keyframes assistant-eye-right-motion {
+	0%, 18%, 22%, 63%, 67%, 100% { transform: translate(1px, -1px) scaleY(1); }
+	20%, 65% { transform: translate(-1px, -1px) scaleY(.025); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.bloom.assistant-speaking .orbix-mask-mouth-bar { animation-duration: 1.4s; }
+}
+
+.dock-assistant-mask {
+	width: 35px;
+	height: 31px;
+	flex: 0 0 auto;
+}
+
+.dock-assistant-mask .orbix-mask-eye {
+	filter: drop-shadow(0 0 2px rgba(32, 195, 255, .65));
+}

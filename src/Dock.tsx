@@ -8,6 +8,7 @@ import { initTheme } from "./theme";
 import { useSettingsSync } from "./hooks/useSettingsSync";
 import { reloadIfMirrorWasStale } from "./hooks/settingsMirror";
 import { FolderOpen } from "lucide-react";
+import { OrbixMask } from "./components/OrbixMask";
 
 import { mergeTrayApps, selectDockTrayApps, type AppInfo, type TrayApp } from "./dockApps";
 import { removeCustomFolder, type DockExtra } from "./dockExtras";
@@ -799,6 +800,12 @@ const Dock = memo(function Dock() {
 		}
 	};
 
+	const openAssistant = async () => {
+		try {
+			await invoke("assistant_open");
+		} catch (error) { showActionError(error); }
+	};
+
 	useEffect(() => {
 		let open = false;
 		let rect = null;
@@ -1232,6 +1239,28 @@ const Dock = memo(function Dock() {
 										</motion.div>
 									</motion.div>
 								)}
+
+									<div
+										className="dock-icon-wrapper apps-folder-item"
+										onMouseEnter={() => setHoveredApp("dock-assistant")}
+										onMouseLeave={() => { setHoveredApp(null); setPressedApp(null); }}
+										onClick={(e) => { e.stopPropagation(); openAssistant(); }}
+										role="button"
+										tabIndex={0}
+										aria-label="Lulu"
+										onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openAssistant(); } }}
+									>
+										{hoveredApp === "dock-assistant" && <div className="tooltip">Lulu</div>}
+										<motion.div
+											className="dock-icon apps-folder-icon"
+											variants={ICON_VARIANTS}
+											animate={hoveredApp === "dock-assistant" ? "hover" : "idle"}
+											onPointerDown={() => setPressedApp("dock-assistant")}
+											onPointerUp={() => setPressedApp(null)}
+										>
+											<OrbixMask className="dock-assistant-mask" />
+										</motion.div>
+									</div>
 
 									<div
 										className="dock-icon-wrapper apps-folder-item"

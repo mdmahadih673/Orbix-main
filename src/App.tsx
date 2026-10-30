@@ -6,6 +6,14 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getVersion } from "@tauri-apps/api/app";
 import type { UpdateCheckResult } from "./updater";
 import "./App.css";
+import { preferredSpeechVoice } from "./speechVoice";
+import { OrbixMask } from "./components/OrbixMask";
+
+const numberWords = (value: number) => {
+	const small = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+	const tens = ["", "", "twenty", "thirty", "forty", "fifty"];
+	return value < 20 ? small[value] : `${tens[Math.floor(value / 10)]}${value % 10 ? ` ${small[value % 10]}` : ""}`;
+};
 import { initTheme } from "./theme";
 import {
 	PlayIcon,
@@ -429,6 +437,7 @@ function App() {
 	const [time, setTime] = useState("");
 	const [date, setDate] = useState("");
 	const [isHovered, setIsHovered] = useState(false);
+	const [assistantActivity, setAssistantActivity] = useState<"idle" | "working" | "speaking">("idle");
 	// Set once the open notch is clicked; shows the panel arrows until hover ends.
 	const [notchClicked, setNotchClicked] = useState(false);
 	const [isReady, setIsReady] = useState(false);
@@ -1056,6 +1065,9 @@ function App() {
 		const unlistenNotchEdgeHover = listen<boolean>("notch-edge-hover", (event) => {
 			setIsEdgeHovered(event.payload);
 		});
+		const unlistenAssistantActivity = listen<string>("assistant-activity", (event) => {
+			setAssistantActivity(event.payload === "speaking" ? "speaking" : event.payload === "working" ? "working" : "idle");
+		});
 
 		// The backend emits this when the window flips to click-through while
 		// the webview still thinks the pointer is inside the notch (it cannot
@@ -1071,6 +1083,7 @@ function App() {
 			unlistenVisibility.then((f) => f());
 			unlistenNotchOverlap.then((f) => f());
 			unlistenNotchEdgeHover.then((f) => f());
+			unlistenAssistantActivity.then((f) => f());
 			unlistenNotchPointerLeft.then((f) => f());
 			document.removeEventListener("contextmenu", preventContext);
 		};
@@ -2551,9 +2564,31 @@ function App() {
 
 	// Music mode shows any time we have media info (playing or paused) and music mode setting is enabled
 	const isMusicMode = mediaInfo.has_media && bloomMode === "music" && settingsMusicModeEnabled;
+	const showExpandedNotchContent =
+		isHovered ||
+		bloomMode === "shelf" ||
+		(bloomMode === "announcement" && !!announcement && !announcementDismissed);
+
+	useEffect(() => {
+		if (!isHovered || !("speechSynthesis" in window)) return;
+		const now = new Date();
+		const hour = now.getHours() % 12 || 12;
+		const minute = now.getMinutes();
+		const hourOfDay = now.getHours();
+		const dayPart = hourOfDay < 12 ? "in the morning" : hourOfDay < 17 ? "in the afternoon" : hourOfDay < 21 ? "in the evening" : "at night";
+		const minuteWords = minute === 0 ? "o'clock" : minute < 10 ? `oh ${numberWords(minute)}` : numberWords(minute);
+		const utterance = new SpeechSynthesisUtterance(`The time is ${numberWords(hour)} ${minuteWords} ${dayPart}.`);
+		utterance.lang = "en-US";
+		utterance.rate = 0.92;
+		const femaleVoice = preferredSpeechVoice("en-US");
+		if (femaleVoice) utterance.voice = femaleVoice;
+		window.speechSynthesis.cancel();
+		window.speechSynthesis.speak(utterance);
+	}, [isHovered]);
 
 	// Calculate width dynamically based on enabled features
 	const getDynamicWidth = () => {
+		if (!showExpandedNotchContent) return 180;
 		if (bloomMode === "announcement" && announcement && !announcementDismissed) return 380;
 		if (isCalendarMode) return 480;
 		if (bloomMode === "shelf") return 380;
@@ -2579,8 +2614,9 @@ function App() {
 	};
 
 	const getDynamicHeight = () => {
+		if (!showExpandedNotchContent) return 32;
 		if (!isExpanded || !isVisible || isHidden) {
-			return isImpacted ? 28.9 : 44.2;
+			return isImpacted ? 32 : 48;
 		}
 		// Announcement card: body is line-clamped, so a fixed size fits both cases.
 		if (bloomMode === "announcement" && announcement && !announcementDismissed) {
@@ -2652,7 +2688,7 @@ function App() {
 			<div style={{ zoom: scale, width: "100%", display: "flex", justifyContent: "center" }}>
 				<motion.div
 					ref={bloomRef}
-					className={`bloom ${isHovered ? "expanded" : ""} ${isImpacted ? "is-impacted" : ""} ${isDragHovering ? "drag-hover" : ""} ${bloomMode === "apps" ? "apps-mode" : ""} ${isCalendarMode ? "calendar-mode" : ""}`}
+					className={`bloom ${isHovered ? "expanded" : ""} ${assistantActivity !== "idle" ? "assistant-working" : ""} ${assistantActivity === "speaking" ? "assistant-speaking" : ""} ${isImpacted ? "is-impacted" : ""} ${isDragHovering ? "drag-hover" : ""} ${bloomMode === "apps" ? "apps-mode" : ""} ${isCalendarMode ? "calendar-mode" : ""}`}
 					onMouseEnter={() => {
 						cancelNotchClose();
 						setIsNotchHovered(true);
@@ -2674,8 +2710,8 @@ function App() {
 					}}
 					initial={{
 						y: 250,
-						width: 30.6,
-						height: 44.2,
+						width: 180,
+						height: 32,
 						borderTopLeftRadius: 18,
 						borderTopRightRadius: 18,
 						borderBottomLeftRadius: 18,
@@ -2686,13 +2722,7 @@ function App() {
 					}}
 					animate={{
 						y: !isReady ? 250 : isVisible ? (isHidden ? -100 : 0) : -150,
-						width: !isReady
-							? 34
-							: isExpanded && isVisible && !isHidden
-								? getDynamicWidth()
-								: isImpacted
-									? 39.1
-									: 30.6,
+						width: !isReady ? 34 : getDynamicWidth(),
 						height: !isReady ? 34 : getDynamicHeight(),
 						opacity: isVisible ? 1 : 0,
 						scaleX: 1,
@@ -2771,8 +2801,13 @@ function App() {
 								</motion.div>
 							)}
 					</AnimatePresence>
+					{!showExpandedNotchContent && (
+						<div className="notch-resting-pet" aria-hidden="true">
+							<div className="notch-pet"><OrbixMask /></div>
+						</div>
+					)}
 					<AnimatePresence mode="wait">
-						{isExpanded && (
+						{isExpanded && showExpandedNotchContent && (
 							<motion.div
 								key="bloom-content"
 								initial={{ opacity: 0 }}

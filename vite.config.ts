@@ -42,7 +42,8 @@ export default defineConfig(async () => ({
 				overlay: "overlay.html",
 				settings: "settings.html",
 				dock: "dock.html",
-				apps: "apps.html"
+				apps: "apps.html",
+				assistant: "assistant.html"
 			}
 		}
 	}
