@@ -40,7 +40,7 @@ export default function Assistant() {
 	const [busy, setBusy] = useState(false);
 	const [voiceReplies, setVoiceReplies] = useState(true);
 	const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("off");
-	const [wakeWordEnabled, setWakeWordEnabled] = useState(() => localStorage.getItem("lulu-wake-word-enabled") !== "false");
+	const [wakeWordEnabled, setWakeWordEnabled] = useState(() => localStorage.getItem("orbix-wake-word-enabled") !== "false");
 	const [voiceCaption, setVoiceCaption] = useState("");
 	const [micLevel, setMicLevel] = useState(0);
 	const [micDevices, setMicDevices] = useState<MicDevice[]>([]);
@@ -117,7 +117,7 @@ export default function Assistant() {
 		const speechWindow = window as Window & { SpeechRecognition?: WakeRecognitionConstructor; webkitSpeechRecognition?: WakeRecognitionConstructor };
 		const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
 		if (!Recognition) {
-			setError("এই Windows WebView-তে wake-word speech recognition নেই। Lulu চালু করতে mic button ব্যবহার করুন।");
+			setError("এই Windows WebView-তে wake-word speech recognition নেই। Hey Mira চালাতে microphone permission ও speech recognition support দরকার।");
 			return;
 		}
 		const recognition = new Recognition();
@@ -128,20 +128,22 @@ export default function Assistant() {
 		recognition.onresult = (event) => {
 			for (let index = event.resultIndex; index < event.results.length; index++) {
 				const phrase = event.results[index][0]?.transcript ?? "";
-				if (/\b(lulu|loo\s*loo)\b|লুলু/i.test(phrase)) {
+				if (/\bhey\s*(mira|lulu)\b|হেই\s*মীরা|হে\s*লুলু/i.test(phrase)) {
 					setError("");
-					setVoiceCaption("Lulu ডেকেছেন · সংযোগ হচ্ছে…");
+					setVoiceCaption("Wake phrase শুনেছি · assistant চালু হচ্ছে…");
 					wakeRecognitionRef.current = null;
 					recognition.stop();
-					void invoke("assistant_open").catch((error) => setError(String(error)));
-					void startVoiceChat();
+					void invoke("assistant_open")
+						.then(() => new Promise((resolve) => window.setTimeout(resolve, 300)))
+						.then(() => startVoiceChat())
+						.catch((error) => setError(String(error)));
 					return;
 				}
 			}
 		};
 		recognition.onerror = (event) => {
 			if (event.error && event.error !== "no-speech" && event.error !== "aborted") {
-				setError(`Lulu wake word শুনতে পারেনি (${event.error})। Microphone permission ও Windows default microphone দেখুন।`);
+				setError(`Hey Mira / Hey Lulu wake word শুনতে পারেনি (${event.error})। Microphone permission ও Windows default microphone দেখুন।`);
 				if (event.error === "not-allowed" || event.error === "service-not-allowed") {
 					wakeRecognitionRef.current = null;
 					setWakeWordEnabled(false);
@@ -161,7 +163,7 @@ export default function Assistant() {
 			setError("");
 		} catch (e) {
 			wakeRecognitionRef.current = null;
-			setError(`Lulu wake word চালু হয়নি: ${String(e)}`);
+			setError(`Hey Mira / Hey Lulu wake word চালু হয়নি: ${String(e)}`);
 		}
 		return () => {
 			if (wakeRecognitionRef.current === recognition) wakeRecognitionRef.current = null;
@@ -507,11 +509,12 @@ export default function Assistant() {
 	const toggleWakeWord = () => {
 		if (voiceStatus !== "off") return;
 		if (!acknowledged || !hasKey) {
-			setError("Lulu wake word চালু করতে Gemini key ও উপরের consent আগে সম্পন্ন করুন।");
+			setError("Hey Mira চালু করতে Gemini key ও উপরের consent আগে সম্পন্ন করুন।");
 			return;
 		}
 		const enabled = !wakeWordEnabled;
 		setWakeWordEnabled(enabled);
+		localStorage.setItem("orbix-wake-word-enabled", String(enabled));
 		localStorage.setItem("lulu-wake-word-enabled", String(enabled));
 		setError("");
 	};
@@ -623,16 +626,16 @@ export default function Assistant() {
 			<button className="assistant-link" onClick={() => openUrl("https://aistudio.google.com/app/apikey").catch((e) => setError(String(e)))}>Google AI Studio-তে free key নিন ↗</button>
 			<label className="assistant-label" htmlFor="gemini-key">API key</label>
 			<input id="gemini-key" className="assistant-input" type="password" autoComplete="off" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="AIza…" />
-			<label className="assistant-consent"><input type="checkbox" checked={acknowledged} onChange={(e) => setAssistantConsent(e.target.checked)} /><span>আমি Google-এর শর্তে যোগ্য (১৮+, পেশাগত/ব্যবসায়িক ব্যবহার; ১৮ বছরের কম বয়সীদের জন্য নয়)। Text ও চালু voice chat-এর live audio Google-এ process হবে। Lulu wake word চালু রাখলে speech-recognition provider trigger word শনাক্ত করতে mic শুনবে। File search/open করলে matching file name Google-এ পাঠানো হতে পারে, file content নয়। Free-tier data উন্নত করতে ও human review-তে ব্যবহার হতে পারে। Sensitive বা confidential তথ্য দেব না।</span></label>
+			<label className="assistant-consent"><input type="checkbox" checked={acknowledged} onChange={(e) => setAssistantConsent(e.target.checked)} /><span>আমি Google-এর শর্তে যোগ্য (১৮+, পেশাগত/ব্যবসায়িক ব্যবহার; ১৮ বছরের কম বয়সীদের জন্য নয়)। Text ও চালু voice chat-এর live audio Google-এ process হবে। Hey Mira/Hey Lulu wake word চালু থাকলে Orbix background-এ microphone শুনবে; Microsoft Edge-এর Web Speech recognition trigger শনাক্ত করতে Azure Cognitive Services-এ audio process করতে পারে। Wake phrase-এর পর conversation audio Gemini Live-এ যাবে। File search/open করলে matching file name Google-এ পাঠানো হতে পারে, file content নয়। Free-tier data উন্নত করতে ও human review-তে ব্যবহার হতে পারে। Sensitive বা confidential তথ্য দেব না।</span></label>
 			<button className="assistant-primary" disabled={!apiKey.trim() || !acknowledged} onClick={saveKey}><KeyRound size={16} /> Key save করুন</button>
 			{error && <p className="assistant-error">{error}</p>}
 		</section> : <>
-			<label className="assistant-session-consent"><input type="checkbox" checked={acknowledged} onChange={(e) => setAssistantConsent(e.target.checked)} /><span><Check size={13} /> আমি Google-এর শর্তে যোগ্য (১৮+, পেশাগত/ব্যবসায়িক ব্যবহার; ১৮ বছরের কম বয়সীদের জন্য নয়)। আমার text ও চালু voice chat-এর live audio Google-এ process হবে। Lulu wake word চালু রাখলে speech-recognition provider trigger word শনাক্ত করতে mic শুনবে। File search/open ব্যবহার করলে matching file name Google-এ পাঠানো হতে পারে; file content পাঠানো হবে না। Free-tier data Google উন্নত করতে ও human review-তে ব্যবহার হতে পারে। Sensitive বা confidential তথ্য দেব না।</span></label>
+			<label className="assistant-session-consent"><input type="checkbox" checked={acknowledged} onChange={(e) => setAssistantConsent(e.target.checked)} /><span><Check size={13} /> আমি Google-এর শর্তে যোগ্য (১৮+, পেশাগত/ব্যবসায়িক ব্যবহার; ১৮ বছরের কম বয়সীদের জন্য নয়)। আমার text ও চালু voice chat-এর live audio Google-এ process হবে। Hey Mira/Hey Lulu wake word চালু থাকলে Orbix background-এ microphone শুনবে; Microsoft Edge Web Speech recognition Azure Cognitive Services-এ audio process করতে পারে। Wake phrase-এর পর conversation audio Gemini Live-এ যাবে। File search/open ব্যবহার করলে matching file name Google-এ পাঠানো হতে পারে; file content পাঠানো হবে না। Free-tier data Google উন্নত করতে ও human review-তে ব্যবহার হতে পারে। Sensitive বা confidential তথ্য দেব না।</span></label>
 			<div className="assistant-workspace-tools">
 				<button className="assistant-workspace-select" onClick={() => void chooseWorkspace()}><FolderOpen size={14}/><span>{workspacePath ? workspacePath.split(/[\\/]/).filter(Boolean).pop() : "VS Code project folder বেছে নিন"}</span><Code2 size={13}/></button>
 				{workspacePath && <label className="assistant-code-consent"><input type="checkbox" checked={shareWorkspace} onChange={(event) => setWorkspaceSharing(event.target.checked)} /><span>Code review/লেখার সময় নির্বাচিত project-এর source code Google Gemini-তে পাঠাতে সম্মতি দিচ্ছি।</span></label>}
 			</div>
-			<button type="button" className={`assistant-wake-toggle ${wakeWordEnabled ? "active" : ""}`} onClick={toggleWakeWord} aria-pressed={wakeWordEnabled}><Mic size={14}/><span><b>{wakeWordEnabled ? "Lulu wake word চালু" : "“Lulu” বলে চালু করুন"}</b><small>{wakeWordEnabled ? "Mic শুনছে · বলুন “Lulu” · বন্ধ করতে চাপুন" : "Orbix চালু থাকলে mic-এ Lulu বলে assistant খুলুন"}</small></span><span className="assistant-wake-state">{wakeWordEnabled ? "ON" : "OFF"}</span></button>
+			<button type="button" className={`assistant-wake-toggle ${wakeWordEnabled ? "active" : ""}`} onClick={toggleWakeWord} aria-pressed={wakeWordEnabled}><Mic size={14}/><span><b>{wakeWordEnabled ? "Hey Mira / Hey Lulu wake word চালু" : "“Hey Mira” বা “Hey Lulu” বলুন"}</b><small>{wakeWordEnabled ? "Orbix background-এ থাকলেও mic শুনবে · বলুন “Hey Mira” বা “Hey Lulu” · বন্ধ করতে চাপুন" : "Orbix চালু থাকলে “Hey Mira” বা “Hey Lulu” বলুন, assistant খুলবে"}</small></span><span className="assistant-wake-state">{wakeWordEnabled ? "ON" : "OFF"}</span></button>
 			<section className="assistant-messages">
 				{messages.length === 0 && <div className="assistant-empty"><span><Bot size={28} /></span><h1>কীভাবে সাহায্য করতে পারি?</h1><p>ফাইল খুঁজুন, app চালু করুন, অথবা যেকোনো প্রশ্ন করুন।</p><div className="assistant-suggestions"><button onClick={() => setInput("Downloads folder-এ PDF খুঁজে দাও") }><FileSearch size={15}/> PDF খুঁজুন</button><button onClick={() => setInput("Open Settings app") }><Power size={15}/> App চালান</button><button onClick={() => setInput("আজকের কাজের জন্য focus tips দাও") }><MessageCircle size={15}/> প্রশ্ন করুন</button></div></div>}
 				{messages.map((message, i) => <article key={i} className={`assistant-message ${message.role}`}><div className="assistant-avatar">{message.role === "user" ? "You" : <Sparkles size={15}/>}</div><div className="assistant-bubble"><p>{message.text}</p>
@@ -651,7 +654,7 @@ export default function Assistant() {
 			</section>
 			{error && <div className="assistant-inline-error">{error}{microphoneDenied && <button className="assistant-action" onClick={() => invoke("open_microphone_privacy_settings").catch((e) => setError(String(e)))}><Mic size={14}/> Microphone Settings খুলুন</button>}</div>}
 			<label className="assistant-mic-picker"><Mic size={13}/><span>Input mic</span><select value={selectedMic} onFocus={() => void refreshMicrophones(true)} onChange={(event) => { setSelectedMic(event.target.value); localStorage.setItem("orbix-assistant-mic-device", event.target.value); }} aria-label="Select microphone" disabled={voiceStatus !== "off"}><option value="">Default microphone</option>{micDevices.map((device) => <option key={device.deviceId} value={device.deviceId}>{device.label}</option>)}</select></label>
-			<form className="assistant-composer" onSubmit={send}><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} placeholder={acknowledged ? "Lulu-কে কিছু জিজ্ঞাসা করুন…" : "চালিয়ে যেতে উপরের সম্মতি দিন…"} rows={2} disabled={voiceStatus !== "off"}/><button type="button" className={`assistant-mic ${voiceStatus !== "off" ? "listening" : ""}`} onClick={toggleVoiceChat} disabled={busy} aria-label={voiceStatus === "off" ? "Start voice conversation" : "End voice conversation"} title={voiceStatus === "off" ? acknowledged ? "Live voice chat শুরু করুন" : "আগে উপরের Gemini voice-consent checkbox-এ টিক দিন" : "Voice conversation শেষ করুন"}>{voiceStatus === "off" ? <Mic size={16}/> : <MicOff size={16}/>}</button><button type="submit" disabled={busy || voiceStatus !== "off" || !input.trim() || !acknowledged} aria-label="Send"><Send size={17}/></button><small>{voiceStatus === "connecting" ? "Live voice session তৈরি হচ্ছে…" : voiceStatus !== "off" ? "আমি শুনছি ও উত্তর বলছি · শেষ করতে mic চাপুন" : acknowledged ? wakeWordEnabled ? "Mic-এ “Lulu” বলুন, অথবা mic button চাপুন" : "Mic চাপুন—সরাসরি কথা বলুন · শেষ করতে আবার চাপুন" : "Mic চালু করতে উপরের consent checkbox-এ টিক দিন"}</small></form>
+			<form className="assistant-composer" onSubmit={send}><textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} placeholder={acknowledged ? "Lulu-কে কিছু জিজ্ঞাসা করুন…" : "চালিয়ে যেতে উপরের সম্মতি দিন…"} rows={2} disabled={voiceStatus !== "off"}/><button type="button" className={`assistant-mic ${voiceStatus !== "off" ? "listening" : ""}`} onClick={toggleVoiceChat} disabled={busy} aria-label={voiceStatus === "off" ? "Start voice conversation" : "End voice conversation"} title={voiceStatus === "off" ? acknowledged ? "Live voice chat শুরু করুন" : "আগে উপরের Gemini voice-consent checkbox-এ টিক দিন" : "Voice conversation শেষ করুন"}>{voiceStatus === "off" ? <Mic size={16}/> : <MicOff size={16}/>}</button><button type="submit" disabled={busy || voiceStatus !== "off" || !input.trim() || !acknowledged} aria-label="Send"><Send size={17}/></button><small>{voiceStatus === "connecting" ? "Live voice session তৈরি হচ্ছে…" : voiceStatus !== "off" ? "আমি শুনছি ও উত্তর বলছি · শেষ করতে mic চাপুন" : acknowledged ? wakeWordEnabled ? "“Hey Mira” বা “Hey Lulu” বলুন, অথবা mic চাপুন" : "Mic চাপুন—সরাসরি কথা বলুন · শেষ করতে আবার চাপুন" : "Mic চালু করতে উপরের সম্মতি checkbox-এ টিক দিন"}</small></form>
 		</>}
 	</main>;
 }
